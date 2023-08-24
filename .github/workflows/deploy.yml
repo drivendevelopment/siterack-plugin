@@ -1,0 +1,45 @@
+name: Deploy
+on:
+  push:
+    tags:
+    - "v*"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Get version
+      id: get_version
+      run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
+    - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
+      with:
+        repository: drivendevelopment/siterack-plugin
+        token: ${{ secrets.ACCESS_TOKEN }}
+        path: core
+    - name: Install dependencies
+      run: |
+        composer install
+    - name: Zip
+      run: |
+        cd ../
+        zip -r siterack-${{ steps.get_version.outputs.VERSION }}.zip siterack -x "siterack/.git/*" "siterack/.github/*" "siterack/node_modules/*" "siterack/.babelrc" "siterack/.gitignore" "siterack/package-lock.json" "siterack/package.json"
+        mv siterack-${{ steps.get_version.outputs.VERSION }}.zip ./siterack/siterack-${{ steps.get_version.outputs.VERSION }}.zip
+        pwd
+    - name: Transfer files to SiteRack website server
+      uses: appleboy/scp-action@v0.1.2
+      with:
+        host: ${{ secrets.WP_HOST }}
+        username: ${{ secrets.WP_USERNAME }}
+        key: ${{ secrets.WP_KEY }}
+        passphrase: ${{ secrets.WP_KEY_PASSPHRASE }}
+        port: ${{ secrets.WP_PORT }}
+        source: "siterack-${{ steps.get_version.outputs.VERSION }}.zip"
+        target: "/home/customer/www/siterack.app/public_html/wp-content/uploads/edd"
+    - name: Deploy
+      id: deployRequest
+      uses: fjogeleit/http-request-action@v1.8.1
+      with:
+        url: "https://siterack.app/?action=deploy_siterack_plugin_update&version=${{ steps.get_version.outputs.VERSION }}&secret=${{ secrets.WP_DEPLOY_SECRET }}"
+        method: "GET"
+    - name: Show deploy response
+      run: echo ${{ steps.deployRequest.outputs.response }}
