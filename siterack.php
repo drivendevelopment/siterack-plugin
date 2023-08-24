@@ -4,7 +4,7 @@
 Plugin Name: SiteRack
 Plugin URI: https://siterack.app
 Description: Manage all your WordPress sites from a single dashboard with SiteRack.
-Version: 0.0.1
+Version: 0.0.2
 Author: Site Rack
 Author URI: https://siterack.app
 Text Domain: siterack
