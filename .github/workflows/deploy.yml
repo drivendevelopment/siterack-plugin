@@ -22,8 +22,8 @@ jobs:
     - name: Zip
       run: |
         cd ../
-        zip -r siterack-${{ steps.get_version.outputs.VERSION }}.zip siterack -x "siterack/.git/*" "siterack/.github/*" "siterack/node_modules/*" "siterack/.babelrc" "siterack/.gitignore" "siterack/package-lock.json" "siterack/package.json"
-        mv siterack-${{ steps.get_version.outputs.VERSION }}.zip ./siterack/siterack-${{ steps.get_version.outputs.VERSION }}.zip
+        zip -r siterack-${{ steps.get_version.outputs.VERSION }}.zip siterack-plugin -x "siterack-plugin/.git/*" "siterack-plugin/.github/*" "siterack-plugin/node_modules/*" "siterack-plugin/.babelrc" "siterack-plugin/.gitignore" "siterack-plugin/package-lock.json" "siterack-plugin/package.json"
+        mv siterack-${{ steps.get_version.outputs.VERSION }}.zip ./siterack-plugin/siterack-${{ steps.get_version.outputs.VERSION }}.zip
         pwd
     - name: Transfer files to SiteRack website server
       uses: appleboy/scp-action@v0.1.2
