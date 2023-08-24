@@ -1,0 +1,20 @@
+{
+    "name": "siterack/siterack-plugin",
+    "description": "SiteRack WordPress plugin.",
+    "type": "project",
+    "require": {
+        "firebase/php-jwt": "*"
+    },
+    "license": "GPL",
+    "autoload": {
+        "psr-4": {
+            "SiteRack\\": "classes/",
+            "Vendor\\SiteRack\\": "vendor/"
+        }
+    },
+    "authors": [
+        {
+            "name": "SiteRack"
+        }
+    ]
+}
