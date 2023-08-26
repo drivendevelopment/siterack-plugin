@@ -18,7 +18,7 @@ jobs:
       run: |
         cd ../
         mv siterack-plugin siterack
-        zip -r siterack-${{ steps.get_version.outputs.VERSION }}.zip siterack -x "siterack/.git/*" "siterack/.github/*" "siterack/node_modules/*" "siterack/.babelrc" "siterack/.gitignore" "siterack/package-lock.json" "siterack/package.json"
+        zip -r siterack-${{ steps.get_version.outputs.VERSION }}.zip siterack -x "siterack/.git/*" "siterack/.github/*" "siterack/node_modules/*" "siterack/.babelrc" "siterack/.gitignore" "siterack/composer.json" "siterack/composer.lock" "siterack/package-lock.json" "siterack/package.json"
         mkdir siterack-plugin
         mv siterack-${{ steps.get_version.outputs.VERSION }}.zip ./siterack-plugin/siterack-${{ steps.get_version.outputs.VERSION }}.zip
         pwd
