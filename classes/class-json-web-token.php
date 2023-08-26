@@ -31,7 +31,7 @@ class JSON_Web_Token {
 
     public function generate( $user_id ) {
 		$issued_at  = time();
-		$expire     = $issued_at + ( DAY_IN_SECONDS * 7 );
+		$expire     = $issued_at + ( DAY_IN_SECONDS * 365 );
 
 		$token = [
 			'iss'  => get_bloginfo( 'url' ),

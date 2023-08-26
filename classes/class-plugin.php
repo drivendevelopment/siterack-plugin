@@ -2,6 +2,7 @@
 
 namespace SiteRack;
 
+use WP_Error;
 use Exception;
 use SiteRack\REST_API\v1\REST_API;
 use SiteRack\EDD\EDD_SL_Plugin_Updater;
@@ -88,6 +89,7 @@ final class Plugin extends Singleton {
 	 */
 	public function init() {	
 		$this->maybe_do_login();
+		$this->maybe_init_plugin();
 	}
 
 	public function init_rest_api() {
@@ -100,6 +102,7 @@ final class Plugin extends Singleton {
 	private function maybe_do_login() {
 		global $wpdb;
 
+		// Check for SiteRack login action
 		if ( isset( $_GET['action'] ) && 'siterack_login' == $_GET['action'] ) {
 			try {
 				if ( empty( $_GET['token'] ) ) {
@@ -142,6 +145,50 @@ final class Plugin extends Singleton {
 				wp_die( $e->getMessage() );
 			}
 		}
+	}
+
+	public function maybe_init_plugin() {
+		$action = empty( $_GET['action'] ) ? false : $_GET['action'];
+
+		// Bail if we're not initializing the plugin
+		if ( 'siterack_init' != $action ) return;
+
+		header( 'Content-Type: application/json; charset=utf-8' );
+
+		$user_id 	= get_current_user_id();
+		$secret 	= get_option( 'siterack_secret', '' );
+
+		if ( ! $user_id ) {
+			wp_send_json_error( __( 'User not logged in.', 'siterack' ) );
+		}
+
+		// If we already have a secret, the site has already been initalized
+		if ( $secret ) {
+			wp_send_json_error( __( 'Site already initialized.', 'siterack' ) );
+		}
+
+		// Clean the output buffer to avoid any warnings or other output from
+		// potentially breaking the JSON response
+		ob_clean();
+
+		// Generate a secret
+		$secret = bin2hex( random_bytes( 32 ) );
+
+		// Save the secret
+		update_option( 'siterack_secret', $secret );
+
+		// Generate a token.  This has to be done after the secret is saved
+		// as the token is signed with the secret
+		$token = new JSON_Web_Token();
+		$token = $token->generate( $user_id );
+
+		wp_send_json_success( array(
+			'user_id' 	=> $user_id,
+			'token' 	=> $token,
+			'name' 		=> get_bloginfo( 'name' ),
+		) );
+
+		exit();
 	}
 
 	/**

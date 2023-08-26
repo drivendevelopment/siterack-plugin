@@ -23,7 +23,7 @@ class REST_API extends WP_REST_Controller {
 
     public function __construct() {
 		add_filter( 'determine_current_user', 	array( $this, 'determine_current_user' ) );
-		add_filter( 'rest_pre_dispatch', 		array( $this, 'rest_pre_dispatch' ) );
+		//add_filter( 'rest_pre_dispatch', 		array( $this, 'rest_pre_dispatch' ) );
 
         $this->register_routes();
     }
@@ -76,7 +76,7 @@ class REST_API extends WP_REST_Controller {
 		$token 			= $json_web_token->validate( $token );
 
 		if ( is_wp_error( $token ) ) {
-			$this->token_error = $token;
+			//$this->token_error = $token;
 
 			return $user_id;
 		}
@@ -92,7 +92,7 @@ class REST_API extends WP_REST_Controller {
 
 		return $request;
 	}
-	
+
 	public function login_url_permission_callback( $request ) {
 		$user_id = $request->get_param( 'user_id' );
 
