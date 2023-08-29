@@ -153,6 +153,10 @@ final class Plugin extends Singleton {
 		// Bail if we're not initializing the plugin
 		if ( 'siterack_init' != $action ) return;
 
+		// Clean the output buffer to avoid any warnings or other output from
+		// potentially breaking the JSON response
+		ob_clean();
+
 		header( 'Content-Type: application/json; charset=utf-8' );
 
 		$user_id 	= get_current_user_id();
@@ -162,20 +166,14 @@ final class Plugin extends Singleton {
 			wp_send_json_error( __( 'User not logged in.', 'siterack' ) );
 		}
 
-		// If we already have a secret, the site has already been initalized
+		// Only generate a secret if the site doesn't already has one
 		if ( $secret ) {
-			wp_send_json_error( __( 'Site already initialized.', 'siterack' ) );
+			// Generate a secret
+			$secret = bin2hex( random_bytes( 32 ) );
+
+			// Save the secret
+			update_option( 'siterack_secret', $secret );
 		}
-
-		// Clean the output buffer to avoid any warnings or other output from
-		// potentially breaking the JSON response
-		ob_clean();
-
-		// Generate a secret
-		$secret = bin2hex( random_bytes( 32 ) );
-
-		// Save the secret
-		update_option( 'siterack_secret', $secret );
 
 		// Generate a token.  This has to be done after the secret is saved
 		// as the token is signed with the secret
