@@ -159,6 +159,7 @@ final class Plugin extends Singleton {
 
 		header( 'Content-Type: application/json; charset=utf-8' );
 
+		$user 		= wp_get_current_user();
 		$user_id 	= get_current_user_id();
 		$secret 	= get_option( 'siterack_secret', '' );
 
@@ -181,9 +182,12 @@ final class Plugin extends Singleton {
 		$token = $token->generate( $user_id );
 
 		wp_send_json_success( array(
-			'user_id' 	=> $user_id,
-			'token' 	=> $token,
-			'name' 		=> get_bloginfo( 'name' ),
+			'name' 				=> get_bloginfo( 'name' ),			
+			'user_id' 			=> $user_id,
+			'user_email' 		=> $user->user_email,
+			'user_display_name' => $user->display_name,
+			'user_avatar_url' 	=> get_avatar_url( $user->ID ),
+			'token' 			=> $token,
 		) );
 
 		exit();
