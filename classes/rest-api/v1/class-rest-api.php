@@ -41,6 +41,14 @@ class REST_API extends WP_REST_Controller {
 				),
 			),
 		) );
+
+		register_rest_route( $this->base, '/users', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'users' ),
+				'permission_callback' => array( $this, 'has_valid_token' ),// '__return_true',//
+			),
+		) );		
 	}  
 
 	/**
@@ -99,6 +107,14 @@ class REST_API extends WP_REST_Controller {
 		return get_current_user_id() == $user_id;
 	}
 
+	public function has_valid_token( $request ) {
+		$json_web_token = new JSON_Web_Token();
+		$token 			= $json_web_token->get_token_from_header();
+		$token 			= $json_web_token->validate( $token );
+
+		return ! is_wp_error( $token );
+	}
+
 	public function login_url( $request ) {
 		$user_id 	= $request->get_param( 'user_id' );
 		$token 		= bin2hex( random_bytes( 32 ) );
@@ -112,5 +128,19 @@ class REST_API extends WP_REST_Controller {
 		), get_site_url() );
 
 		return $url;
+	}
+
+	public function users() {
+		$users = get_users( array(
+			'fields' => array( 'ID', 'user_login', 'user_email', 'display_name' ),
+		) );
+
+		foreach ( $users as &$user ) {
+			$user->avatar_url 	= get_avatar_url( $user->ID );
+			$user->first_name 	= get_user_meta( $user->ID, 'first_name', true );
+			$user->last_name 	= get_user_meta( $user->ID, 'last_name', true );
+		}
+
+		return $users;
 	}
 }
