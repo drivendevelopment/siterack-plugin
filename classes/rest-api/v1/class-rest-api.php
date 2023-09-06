@@ -4,6 +4,7 @@ namespace SiteRack\REST_API\v1;
 
 use Exception;
 use WP_Error;
+use WP_REST_Request;
 use WP_REST_Controller;
 use WP_REST_Server;
 use SiteRack\JSON_Web_Token;
@@ -46,9 +47,27 @@ class REST_API extends WP_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'users' ),
-				'permission_callback' => array( $this, 'has_valid_token' ),// '__return_true',//
+				'permission_callback' => array( $this, 'has_valid_token' ),
 			),
-		) );		
+		) );	
+		
+		register_rest_route( $this->base, '/users/token', array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'user_token' ),
+				'permission_callback' => '__return_true',
+				'args' => array(
+					'username' => array(
+						'required' 			=> true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'password' => array(
+						'required' 			=> true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),					
+				),				
+			),
+		) );	
 	}  
 
 	/**
@@ -101,13 +120,13 @@ class REST_API extends WP_REST_Controller {
 		return $request;
 	}
 
-	public function login_url_permission_callback( $request ) {
+	public function login_url_permission_callback( WP_REST_Request $request ) {
 		$user_id = $request->get_param( 'user_id' );
 
 		return get_current_user_id() == $user_id;
 	}
 
-	public function has_valid_token( $request ) {
+	public function has_valid_token( WP_REST_Request $request ) {
 		$json_web_token = new JSON_Web_Token();
 		$token 			= $json_web_token->get_token_from_header();
 		$token 			= $json_web_token->validate( $token );
@@ -115,7 +134,7 @@ class REST_API extends WP_REST_Controller {
 		return ! is_wp_error( $token );
 	}
 
-	public function login_url( $request ) {
+	public function login_url( WP_REST_Request $request ) {
 		$user_id 	= $request->get_param( 'user_id' );
 		$token 		= bin2hex( random_bytes( 32 ) );
 
@@ -142,5 +161,26 @@ class REST_API extends WP_REST_Controller {
 		}
 
 		return $users;
+	}
+
+	public function user_token( WP_REST_Request $request ) {
+		$username 	= $request->get_param( 'username' );
+		$password 	= $request->get_param( 'password' );
+		$user 		= wp_authenticate( $username, $password );
+
+		if ( is_wp_error( $user ) ) {
+			return new WP_Error(
+				'siterack_error',
+				$user->get_error_message(),
+				array( 'status' => 401 )
+			);
+		} else {
+			$json_web_token = new JSON_Web_Token();
+			$token 			= $json_web_token->generate( $user->ID );
+
+			return array(
+				'token' => $token,
+			);
+		}
 	}
 }
