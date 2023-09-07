@@ -160,15 +160,20 @@ final class Plugin extends Singleton {
 		header( 'Content-Type: application/json; charset=utf-8' );
 
 		$user 		= wp_get_current_user();
-		$user_id 	= get_current_user_id();
-		$secret 	= get_option( 'siterack_secret', '' );
+		$secret 	= get_option( 'siterack_secret', false );
 
-		if ( ! $user_id ) {
+		// Only allow logged-in users to perform this action
+		if ( 0 == $user->ID ) {
 			wp_send_json_error( __( 'User not logged in.', 'siterack' ) );
 		}
 
+		// Only allow administrators to perform this action
+		if ( ! in_array( 'administrator', $user->roles ) ) {
+			wp_send_json_error( __( 'Only administrators may initialize SiteRack.', 'siterack' ) );
+		}
+
 		// Only generate a secret if the site doesn't already has one
-		if ( $secret ) {
+		if ( ! $secret ) {
 			// Generate a secret
 			$secret = bin2hex( random_bytes( 32 ) );
 
@@ -179,11 +184,11 @@ final class Plugin extends Singleton {
 		// Generate a token.  This has to be done after the secret is saved
 		// as the token is signed with the secret
 		$token = new JSON_Web_Token();
-		$token = $token->generate( $user_id );
+		$token = $token->generate( $user->ID );
 
 		wp_send_json_success( array(
 			'name' 				=> get_bloginfo( 'name' ),			
-			'user_id' 			=> $user_id,
+			'user_id' 			=> $user->ID,
 			'user_email' 		=> $user->user_email,
 			'user_display_name' => $user->display_name,
 			'user_avatar_url' 	=> get_avatar_url( $user->ID ),
