@@ -4,7 +4,7 @@ namespace SiteRack;
 
 // Disable direct load
 if ( ! defined( 'ABSPATH' ) ) {
-	die( 'Access denied.' );
+    die( 'Access denied.' );
 }
 
 /**
@@ -13,8 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 abstract class Singleton {
 
     /**
-	 * Holds an instance of the class.
-	 *
+     * Holds an instance of the class.
+     *
      * @var Singleton
      */
     protected static $instance;
@@ -22,15 +22,15 @@ abstract class Singleton {
     abstract protected function __construct();
 
     /**
-	 * Returns the singleton instance of the plugin.
+     * Returns the singleton instance of the plugin.
      *
      * @return Singleton
-	 */
+     */
     public static function get_instance() {
-		if ( empty( static::$instance ) ) {
-			static::$instance = new static();
-		}
+        if ( empty( static::$instance ) ) {
+            static::$instance = new static();
+        }
 
-		return static::$instance;
-	}
+        return static::$instance;
+    }
 }
