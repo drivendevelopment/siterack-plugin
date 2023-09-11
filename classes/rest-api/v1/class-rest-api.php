@@ -46,7 +46,7 @@ class REST_API extends WP_REST_Controller {
             array(
                 'methods'               => WP_REST_Server::READABLE,
                 'callback'              => array( $this, 'users' ),
-                'permission_callback'   => array( $this, 'has_valid_token' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
             ),
         ) );	
         
@@ -66,7 +66,15 @@ class REST_API extends WP_REST_Controller {
                     ),					
                 ),				
             ),
-        ) );	
+        ) );
+        
+        register_rest_route( $this->base, '/roles', array(
+            array(
+                'methods'               => WP_REST_Server::READABLE,
+                'callback'              => array( $this, 'roles' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+            ),
+        ) );        
     }  
 
     /**
@@ -141,6 +149,15 @@ class REST_API extends WP_REST_Controller {
     }
 
     /**
+     * Checks that the current user is an administrator.
+     */
+    public function is_admin() {
+        $user = wp_get_current_user();
+
+        return ! empty( $user->roles ) && in_array( 'administrator', $user->roles );
+    }
+
+    /**
      * Returns a URL that can be used to log the user into the site.
      */
     public function login_url( WP_REST_Request $request ) {
@@ -156,6 +173,24 @@ class REST_API extends WP_REST_Controller {
         ), get_site_url() );
 
         return $url;
+    }
+
+    /**
+     * Returns the site's roles.
+     */
+    public function roles() {
+        $roles      = array();
+        $wp_roles 	= wp_roles();
+        $names      = $wp_roles->get_names();
+    
+        foreach ( $names as $role => $name ) {
+            $roles[] = array(
+                'role'	=> $role,
+                'name'	=> $name,
+            );
+        }
+
+        return $roles;
     }
 
     /**
