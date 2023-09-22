@@ -74,6 +74,14 @@ class REST_API extends WP_REST_Controller {
                 'callback'              => array( $this, 'roles' ),
                 'permission_callback'   => array( $this, 'is_admin' ),
             ),
+        ) );   
+        
+        register_rest_route( $this->base, '/plugins', array(
+            array(
+                'methods'               => WP_REST_Server::READABLE,
+                'callback'              => array( $this, 'plugins' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+            ),
         ) );        
     }  
 
@@ -197,6 +205,8 @@ class REST_API extends WP_REST_Controller {
      * Returns the site's users.
      */
     public function users() {
+        // TODO: Review native WP users endpoint to see if it can be used instead
+        // TODO: Add pagination
         $users = get_users( array(
             'fields' => array( 'ID', 'user_login', 'user_email', 'display_name' ),
         ) );
@@ -233,5 +243,36 @@ class REST_API extends WP_REST_Controller {
                 'token' => $token,
             );
         }
+    }
+
+    public function plugins( WP_REST_Request $request ) {
+        if ( ! function_exists( 'get_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        if ( ! function_exists( 'get_plugin_updates' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/update.php';
+        }
+
+        $plugins        = get_plugins();
+        $updates        = get_plugin_updates();
+        $active_plugins = ( array ) get_option( 'active_plugins', array() );
+
+        foreach ( $plugins as $slug => $plugin ) {
+            $plugins[ $slug ]['slug']     = $slug;
+            $plugins[ $slug ]['status']   = 'inactive';
+
+            // Check if plugin is active
+            if ( in_array( $slug, $active_plugins ) ) {
+                $plugins[ $slug ]['status'] = 'active';
+            }
+
+            // Append update info if available
+            if ( isset( $updates[ $slug ]->update ) ) {
+                $plugins[ $slug ]['update'] = $updates[ $slug ]->update;
+            }
+        }
+
+        return array_values( $plugins );
     }
 }

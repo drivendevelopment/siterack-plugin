@@ -9,6 +9,7 @@ Author: Site Rack
 Author URI: https://siterack.app
 Text Domain: siterack
 License: GPLv2 or later
+Requires PHP: 7.4
 
 Copyright 2023 Driven Development, LLC (email : hello@siterack.app)
 
