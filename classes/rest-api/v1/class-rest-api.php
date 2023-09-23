@@ -7,7 +7,10 @@ use WP_Error;
 use WP_REST_Request;
 use WP_REST_Controller;
 use WP_REST_Server;
+use Plugin_Upgrader;
+
 use SiteRack\JSON_Web_Token;
+use SiteRack\Empty_Upgrader_Skin;
 
 // Disable direct load
 if ( ! defined( 'ABSPATH' ) ) {
@@ -81,8 +84,92 @@ class REST_API extends WP_REST_Controller {
                 'methods'               => WP_REST_Server::READABLE,
                 'callback'              => array( $this, 'plugins' ),
                 'permission_callback'   => array( $this, 'is_admin' ),
-            ),
-        ) );        
+            ),           
+        ) );  
+        
+        register_rest_route( $this->base, '/plugins/update', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'update_plugins' ),
+                'permission_callback'   => '__return_true', //array( $this, 'is_admin' ),
+            ),            
+        ) );  
+        
+        register_rest_route( $this->base, '/plugins/activate', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'activate_plugin' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+                'args' => array(
+                    'plugin' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'sanitize_text_field',
+                    ),
+                    'network_wide' => array(
+                        'default'           => false,
+                        'sanitize_callback' => 'boolval',
+                    ),		
+                ),	                
+            ),            
+        ) );
+
+        register_rest_route( $this->base, '/plugins/bulk-activate', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'activate_plugins' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+                'args' => array(
+                    'plugins' => array(
+                        'required'          => true,
+                        'sanitize_callback' => function( $param, $request, $key ){
+                            return array_map( 'sanitize_text_field', $param );
+                        },
+                    ),
+                    'network_wide' => array(
+                        'default'           => false,
+                        'sanitize_callback' => 'boolval',
+                    ),	                    			
+                ),	                
+            ),            
+        ) );
+
+        register_rest_route( $this->base, '/plugins/deactivate', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'deactivate_plugins' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+                'args' => array(
+                    'plugin' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'sanitize_callback',
+                    ),
+                    'network_wide' => array(
+                        'default'           => false,
+                        'sanitize_callback' => 'boolval',
+                    ),                    		
+                ),	                
+            ),            
+        ) ); 
+
+        register_rest_route( $this->base, '/plugins/bulk-deactivate', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'deactivate_plugins' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+                'args' => array(
+                    'plugins' => array(
+                        'required'          => true,
+                        'sanitize_callback' => function( $param, $request, $key ){
+                            return array_map( 'sanitize_text_field', $param );
+                        },
+                    ),	
+                    'network_wide' => array(
+                        'default'           => false,
+                        'sanitize_callback' => 'boolval',
+                    ),	                    			
+                ),	                
+            ),            
+        ) );           
     }  
 
     /**
@@ -245,6 +332,9 @@ class REST_API extends WP_REST_Controller {
         }
     }
 
+    /**
+     * Returns the site's plugins.
+     */
     public function plugins( WP_REST_Request $request ) {
         if ( ! function_exists( 'get_plugins' ) ) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -275,4 +365,99 @@ class REST_API extends WP_REST_Controller {
 
         return array_values( $plugins );
     }
+
+    /**
+     * Updates the specified plugins.
+     */
+    public function update_plugins( WP_REST_Request $request ) {
+        if ( ! class_exists( 'Plugin_Upgrader' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/misc.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+            require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+            require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
+        }
+
+        $plugins    = $request->get_param( 'plugins' );
+        $skin       = new Empty_Upgrader_Skin();
+        $upgrader   = new Plugin_Upgrader( $skin );
+        $results    = $upgrader->bulk_upgrade( $plugins );
+
+        return $skin->feedback;
+    }
+
+    /**
+     * Activates a single plugin.
+     */
+    public function activate_plugin( WP_REST_Request $request ) {
+        if ( ! function_exists( 'activate_plugin' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugin         = $request->get_param( 'plugin' );
+        $network_wide   = $request->get_param( 'network_wide' );
+        $result         = activate_plugin( $plugins, '', $network_wide );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        } else {
+            return true;
+        }
+    }
+
+    /**
+     * Activates multiple plugins at once.
+     */
+    public function activate_plugins( WP_REST_Request $request ) {
+        if ( ! function_exists( 'activate_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugins        = $request->get_param( 'plugins' );
+        $network_wide   = $request->get_param( 'network_wide' );
+        $result         = activate_plugins( $plugins, '', $network_wide );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        } else {
+            return true;
+        }
+    }
+
+    /**
+     * Deactivates a single plugin.
+     */
+    public function deactivate_plugin( WP_REST_Request $request ) {
+        if ( ! function_exists( 'deactivate_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugin         = $request->get_param( 'plugin' );
+        $network_wide   = $request->get_param( 'network_wide' );
+        $result         = deactivate_plugins( $plugin, false, $network_wide );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        } else {
+            return true;
+        }
+    }     
+    /**
+     * Deactivates multiple plugins at once.
+     */
+    public function deactivate_plugins( WP_REST_Request $request ) {
+        if ( ! function_exists( 'deactivate_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $plugins        = $request->get_param( 'plugins' );
+        $network_wide   = $request->get_param( 'network_wide' );
+        $result         = deactivate_plugins( $plugins, false, $network_wide );
+
+        if ( is_wp_error( $result ) ) {
+            return $result;
+        } else {
+            return true;
+        }
+    }    
 }
