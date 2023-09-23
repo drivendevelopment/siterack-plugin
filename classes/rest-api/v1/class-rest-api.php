@@ -107,7 +107,7 @@ class REST_API extends WP_REST_Controller {
                     ),
                     'network_wide' => array(
                         'default'           => false,
-                        'sanitize_callback' => 'boolval',
+                        'sanitize_callback' => 'rest_sanitize_boolean',
                     ),		
                 ),	                
             ),            
@@ -127,7 +127,7 @@ class REST_API extends WP_REST_Controller {
                     ),
                     'network_wide' => array(
                         'default'           => false,
-                        'sanitize_callback' => 'boolval',
+                        'sanitize_callback' => 'rest_sanitize_boolean',
                     ),	                    			
                 ),	                
             ),            
@@ -136,16 +136,16 @@ class REST_API extends WP_REST_Controller {
         register_rest_route( $this->base, '/plugins/deactivate', array(
             array(
                 'methods'               => WP_REST_Server::CREATABLE,
-                'callback'              => array( $this, 'deactivate_plugins' ),
+                'callback'              => array( $this, 'deactivate_plugin' ),
                 'permission_callback'   => array( $this, 'is_admin' ),
                 'args' => array(
                     'plugin' => array(
                         'required'          => true,
-                        'sanitize_callback' => 'sanitize_callback',
+                        'sanitize_callback' => 'sanitize_text_field',
                     ),
                     'network_wide' => array(
                         'default'           => false,
-                        'sanitize_callback' => 'boolval',
+                        'sanitize_callback' => 'rest_sanitize_boolean',
                     ),                    		
                 ),	                
             ),            
@@ -165,7 +165,7 @@ class REST_API extends WP_REST_Controller {
                     ),	
                     'network_wide' => array(
                         'default'           => false,
-                        'sanitize_callback' => 'boolval',
+                        'sanitize_callback' => 'rest_sanitize_boolean',
                     ),	                    			
                 ),	                
             ),            
@@ -396,7 +396,7 @@ class REST_API extends WP_REST_Controller {
 
         $plugin         = $request->get_param( 'plugin' );
         $network_wide   = $request->get_param( 'network_wide' );
-        $result         = activate_plugin( $plugins, '', $network_wide );
+        $result         = activate_plugin( $plugin, '', $network_wide );
 
         if ( is_wp_error( $result ) ) {
             return $result;
