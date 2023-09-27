@@ -17,6 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 final class Plugin extends Singleton {
 
+    public $siterack_app_url = 'https://dashboard.siterack.app/';
+
     /**
      * Holds an instance of the class.
      *
@@ -28,9 +30,15 @@ final class Plugin extends Singleton {
         // Register autoload function
         spl_autoload_register( array( $this, 'autoload' ) );
 
+        // Override SiteRack app URL if an alternate URL is defined
+        if ( defined( 'SITERACK_APP_URL' ) ) {
+            $this->siterack_app_url = SITERACK_APP_URL;
+        }
+
         add_action( 'init', array( $this, 'init' ) );
         add_action( 'admin_init', array( $this, 'init_updates' ) );
         add_action( 'rest_api_init', array( $this, 'init_rest_api' ) );
+        add_action( 'admin_notices', array( $this, 'maybe_show_connection_notice' ) );
     }
 
     /**
@@ -90,6 +98,7 @@ final class Plugin extends Singleton {
     public function init() {	
         $this->maybe_do_login();
         $this->maybe_init_plugin();
+        $this->maybe_refresh_connection_token();
     }
 
     public function init_rest_api() {
@@ -148,7 +157,7 @@ final class Plugin extends Singleton {
     }
 
     public function maybe_init_plugin() {
-        $action = empty( $_GET['action'] ) ? false : $_GET['action'];
+        $action = empty( $_GET['action'] ) ? false : sanitize_text_field( $_GET['action'] );
 
         // Bail if we're not initializing the plugin
         if ( 'siterack_init' != $action ) return;
@@ -175,7 +184,7 @@ final class Plugin extends Singleton {
         // Only generate a secret if the site doesn't already has one
         if ( ! $secret ) {
             // Generate a secret
-            $secret = bin2hex( random_bytes( 32 ) );
+            $secret = $this->generate_token();
 
             // Save the secret
             update_option( 'siterack_secret', $secret );
@@ -199,6 +208,35 @@ final class Plugin extends Singleton {
     }
 
     /**
+     * Refreshes the connection token for the current user if it has expired
+     * (or creates one if it doesn't exist).
+     */
+    public function maybe_refresh_connection_token() {
+        // Only refresh if the user is logged in
+        if ( ! is_user_logged_in() ) return;
+
+        $token = $this->get_connection_token();
+
+        // Only refresh if the token is expired
+        if ( $token && ! $this->is_connection_token_expired( $token ) ) return;
+
+        $token = $this->generate_token();
+
+        update_user_meta(
+            get_current_user_id(),
+            'siterack_connection_token',
+            $token
+        );
+
+        // Expire token after 1 hour
+        update_user_meta(
+            get_current_user_id(),
+            'siterack_connection_token_expiration',
+            time() + ( 60 * 60 )
+        );
+    }
+
+    /**
      * Initializes the EDD plugin updater.
      */
     public function init_updates() {
@@ -215,5 +253,66 @@ final class Plugin extends Singleton {
                 'author'    => $plugin_data['Author'],
             )
         );
+    }
+
+    /**
+     * Returns the connection token for the current user.
+     */
+    public function get_connection_token() {
+        return get_user_meta(
+            get_current_user_id(),
+            'siterack_connection_token',
+            true
+        );
+    }
+
+    /**
+     * Displays an admin notice with the connection key if the
+     * site hasn't been connected to SiteRack yet.
+     */
+    public function maybe_show_connection_notice() {
+        // Only show to users with permission to activate plugins
+        if ( ! current_user_can( 'activate_plugins' ) ) return;
+
+        $secret = get_option( 'siterack_secret', false );
+
+        if ( ! $secret ) {
+            $url = add_query_arg( array(
+                'url'   => get_bloginfo( 'url' ),
+                'token' => $this->get_connection_token(),
+            ), $this->siterack_app_url . 'connect' );
+
+            ?>
+                <div class="notice notice-info">
+                    <p><?php _e( "Thank you for installing SiteRack! We're excited to have you on board.", 'siterack' ); ?></p>
+                    <p><?php _e( "To add this site to your dashboard, simply click the button below.", 'siterack' ); ?></p>
+                    <p><a class="button button-primary" href="<?php echo esc_url( $url ); ?>"><?php _e( 'Connect to SiteRack', 'siterack' ); ?></a></p>
+                </div>
+            <?php
+        }
+    }
+
+    /**
+     * Generates a random token.
+     */
+    public function generate_token() {
+        return bin2hex( random_bytes( 32 ) );
+    }
+
+    /**
+     * Returns true if the connection token is expired.
+     */
+    public function is_connection_token_expired( $token, $user_id = false ) {
+        if ( ! $user_id ) {
+            $user_id = get_current_user_id();
+        }
+        
+        $expiration = ( int ) get_user_meta(
+            $user_id,
+            'siterack_connection_token_expiration',
+            true
+        );
+
+        return time() > $expiration;
     }
 }

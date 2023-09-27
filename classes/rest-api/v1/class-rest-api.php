@@ -9,6 +9,8 @@ use WP_REST_Controller;
 use WP_REST_Server;
 use Plugin_Upgrader;
 
+use SiteRack\Plugin;
+use SiteRack\Cache_Helper;
 use SiteRack\JSON_Web_Token;
 use SiteRack\Empty_Upgrader_Skin;
 
@@ -32,6 +34,20 @@ class REST_API extends WP_REST_Controller {
     }
 
     public function register_routes() {
+        register_rest_route( $this->base, '/connect', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'connect' ),
+                'permission_callback'   => '__return_true',
+                'args' => array(
+                    'token' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'sanitize_text_field',
+                    )
+                ),
+            ),
+        ) );
+
         register_rest_route( $this->base, '/login-url', array(
             array(
                 'methods'               => WP_REST_Server::CREATABLE,
@@ -71,6 +87,14 @@ class REST_API extends WP_REST_Controller {
             ),
         ) );
         
+        register_rest_route( $this->base, '/cache/flush', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'flush_cache' ),
+                'permission_callback'   => array( $this, 'has_valid_token' ),
+            ),
+        ) );  
+
         register_rest_route( $this->base, '/roles', array(
             array(
                 'methods'               => WP_REST_Server::READABLE,
@@ -253,6 +277,47 @@ class REST_API extends WP_REST_Controller {
     }
 
     /**
+     * Finds the user with the specified connection token, and, if the token
+     * hasn't expired, issues a JSON web token for the user.
+     */
+    public function connect( WP_REST_Request $request ) {
+        $plugin = Plugin::get_instance();
+        $token  = $request->get_param( 'token' );
+
+        $user = get_users( array(
+            'meta_key'      => 'siterack_connection_token',
+            'meta_value'    => $token,
+            'number'        => 1,
+        ) );
+
+        if ( empty( $user ) ) {
+            return new WP_Error(
+                'siterack_error',
+                __( 'Invalid connection token.', 'siterack' ),
+                array( 'status' => 401 )
+            );
+        }
+
+        $user = $user[0];
+
+        if ( $plugin->is_connection_token_expired( $token ) ) {
+            return new WP_Error(
+                'siterack_error',
+                __( 'Connection token has expired.', 'siterack' ),
+                array( 'status' => 401 )
+            );
+        }
+
+        $json_web_token = new JSON_Web_Token();
+        $token          = $json_web_token->generate( $user->ID );
+
+        return array(
+            'user_id'   => $user->ID,
+            'token'     => $token,
+        );
+    }
+
+    /**
      * Returns a URL that can be used to log the user into the site.
      */
     public function login_url( WP_REST_Request $request ) {
@@ -343,6 +408,9 @@ class REST_API extends WP_REST_Controller {
         if ( ! function_exists( 'get_plugin_updates' ) ) {
             require_once ABSPATH . 'wp-admin/includes/update.php';
         }
+
+        // Force WordPress to check for updates
+        wp_update_plugins();
 
         $plugins        = get_plugins();
         $updates        = get_plugin_updates();
@@ -460,4 +528,15 @@ class REST_API extends WP_REST_Controller {
             return true;
         }
     }    
+
+    /**
+     * Flushes the site's cache.
+     */
+    public function flush_cache( WP_REST_Request $request ) {
+        $cache_helper = new Cache_Helper();
+
+        $cache_helper->flush_all();
+
+        return true;
+    }
 }
