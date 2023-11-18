@@ -2,6 +2,7 @@
 
 namespace SiteRack;
 
+use WP_User;
 use WP_Error;
 use Exception;
 use SiteRack\REST_API\v1\REST_API;
@@ -39,6 +40,7 @@ final class Plugin extends Singleton {
         add_action( 'admin_init', array( $this, 'init_updates' ) );
         add_action( 'rest_api_init', array( $this, 'init_rest_api' ) );
         add_action( 'admin_notices', array( $this, 'maybe_show_connection_notice' ) );
+        add_action( 'admin_notices', array( $this, 'maybe_show_connection_success_notice' ) );
     }
 
     /**
@@ -101,6 +103,9 @@ final class Plugin extends Singleton {
         $this->maybe_refresh_connection_token();
     }
 
+    /**
+     * WordPress init REST API action.
+     */
     public function init_rest_api() {
         new REST_API();
     }
@@ -156,8 +161,12 @@ final class Plugin extends Singleton {
         }
     }
 
+    /**
+     * Handles requests to initialize the plugin when connecting the site to SiteRack.
+     */
     public function maybe_init_plugin() {
         $action = empty( $_GET['action'] ) ? false : sanitize_text_field( $_GET['action'] );
+        $user   = wp_get_current_user();
 
         // Bail if we're not initializing the plugin
         if ( 'siterack_init' != $action ) return;
@@ -167,9 +176,6 @@ final class Plugin extends Singleton {
         ob_clean();
 
         header( 'Content-Type: application/json; charset=utf-8' );
-
-        $user 		= wp_get_current_user();
-        $secret 	= get_option( 'siterack_secret', false );
 
         // Only allow logged-in users to perform this action
         if ( 0 == $user->ID ) {
@@ -181,28 +187,7 @@ final class Plugin extends Singleton {
             wp_send_json_error( __( 'Only administrators may initialize SiteRack.', 'siterack' ) );
         }
 
-        // Only generate a secret if the site doesn't already has one
-        if ( ! $secret ) {
-            // Generate a secret
-            $secret = $this->generate_token();
-
-            // Save the secret
-            update_option( 'siterack_secret', $secret );
-        }
-
-        // Generate a token.  This has to be done after the secret is saved
-        // as the token is signed with the secret
-        $token = new JSON_Web_Token();
-        $token = $token->generate( $user->ID );
-
-        wp_send_json_success( array(
-            'name' 				=> get_bloginfo( 'name' ),			
-            'user_id' 			=> $user->ID,
-            'user_email' 		=> $user->user_email,
-            'user_display_name' => $user->display_name,
-            'user_avatar_url' 	=> get_avatar_url( $user->ID ),
-            'token' 			=> $token,
-        ) );
+        wp_send_json_success( $this->init_plugin( $user ) );
 
         exit();
     }
@@ -237,6 +222,44 @@ final class Plugin extends Singleton {
     }
 
     /**
+     * Initializes the site secret and returns an access token for the user.
+     * 
+     * @param WP_User $user
+     *  The user to generate an access token for.
+     * 
+     * @return array
+     *  An array containing basic data about the site that is used when adding
+     *  the site to the user's dashboard along with an access token.
+     */
+    public function init_plugin( WP_User $user ) {
+        $secret = get_option( 'siterack_secret', false );
+
+        // Only generate a secret if the site doesn't already has one
+        if ( ! $secret ) {
+            // Generate a secret
+            $secret = $this->generate_token();
+
+            // Save the secret
+            update_option( 'siterack_secret', $secret );
+        }
+
+        // Generate a token.  This has to be done after the secret is saved
+        // as the token is signed with the secret
+        $token = new JSON_Web_Token();
+        $token = $token->generate( $user->ID );
+
+        return array(
+            'name' 				=> get_bloginfo( 'name' ),			
+            'user_id' 			=> $user->ID,
+            'user_login'        => $user->user_login,
+            'user_email' 		=> $user->user_email,
+            'user_display_name' => $user->display_name,
+            'user_avatar_url' 	=> get_avatar_url( $user->ID ),
+            'token' 			=> $token,
+        );
+    }
+
+    /**
      * Initializes the EDD plugin updater.
      */
     public function init_updates() {
@@ -267,8 +290,8 @@ final class Plugin extends Singleton {
     }
 
     /**
-     * Displays an admin notice with the connection key if the
-     * site hasn't been connected to SiteRack yet.
+     * Displays an admin notice prompting the user to add the site to their dashboard
+     * if the site hasn't been added to one yet.
      */
     public function maybe_show_connection_notice() {
         // Only show to users with permission to activate plugins
@@ -278,6 +301,7 @@ final class Plugin extends Singleton {
 
         if ( ! $secret ) {
             $url = add_query_arg( array(
+                'name'  => get_bloginfo( 'name' ),			
                 'url'   => get_bloginfo( 'url' ),
                 'token' => $this->get_connection_token(),
             ), $this->siterack_app_url . 'connect' );
@@ -285,10 +309,23 @@ final class Plugin extends Singleton {
             ?>
                 <div class="notice notice-info">
                     <p><?php _e( "Thank you for installing SiteRack! We're excited to have you on board.", 'siterack' ); ?></p>
-                    <p><?php _e( "To add this site to your dashboard, simply click the button below.", 'siterack' ); ?></p>
+                    <p><?php _e( "To add this site to your SiteRack dashboard, simply click the button below.", 'siterack' ); ?></p>
                     <p><a class="button button-primary" href="<?php echo esc_url( $url ); ?>"><?php _e( 'Connect to SiteRack', 'siterack' ); ?></a></p>
                 </div>
             <?php
+        }
+    }
+
+    /**
+     * Displays a notice when a site has been successfully connected.
+     */
+    public function maybe_show_connection_success_notice() {
+        if ( isset( $_GET['action'] ) && 'siterack_connect_success' === $_GET['action'] ) {
+            ?>
+                <div class="notice notice-success">
+                    <p><?php _e( 'Success! This site has been added to your SiteRack dashboard.', 'siterack' ); ?></p>
+                </div>
+            <?php            
         }
     }
 
@@ -300,7 +337,16 @@ final class Plugin extends Singleton {
     }
 
     /**
-     * Returns true if the connection token is expired.
+     * Returns true if the user's connection token is expired.
+     * 
+     * @param string $token
+     *  The connection token to check.
+     * 
+     * @param int $user_id
+     *  The user ID to check.  Defaults to the current user.
+     * 
+     * @return bool
+     *  True if the token is expired, false otherwise.
      */
     public function is_connection_token_expired( $token, $user_id = false ) {
         if ( ! $user_id ) {
@@ -314,5 +360,27 @@ final class Plugin extends Singleton {
         );
 
         return time() > $expiration;
+    }
+
+    /**
+     * Returns the first user matching the specified meta key and value.
+     * 
+     * @param string $key
+     *  The meta key to search for.
+     *
+     * @param string $value
+     *  The meta value to search for.
+     * 
+     * @return WP_User|false
+     *  The user matching the specified meta key and value, or false if no user found.
+     */
+    public function get_user_by_meta( $key, $value ) {
+        $user = get_users( array(
+            'meta_key'      => $key,
+            'meta_value'    => $value,
+            'number'        => 1,
+        ) );
+
+        return empty( $user[0] ) ? false : $user[0];       
     }
 }

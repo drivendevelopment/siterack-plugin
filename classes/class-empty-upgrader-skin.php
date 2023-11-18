@@ -4,11 +4,13 @@ namespace SiteRack;
 
 require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader-skin.php';
 
+/**
+ * Suppresses output from the WP_Upgrader class so that we can update plugins
+ * via the REST API without the upgrader outputting messages.
+ */
 class Empty_Upgrader_Skin extends \WP_Upgrader_Skin {
 
     public $feedback = array();
-
-    public $errors = array();
 
 	public function header() {}
 
@@ -23,10 +25,6 @@ class Empty_Upgrader_Skin extends \WP_Upgrader_Skin {
 	public function bulk_header() {}
 
 	public function bulk_footer() {}
-
-    public function error( $errors ) {
-        $this->errors = $errors;
-    }
     
 	public function feedback( $feedback, ...$args ) {
 		if ( isset( $this->upgrader->strings[ $feedback ] ) ) {

@@ -115,7 +115,7 @@ class REST_API extends WP_REST_Controller {
             array(
                 'methods'               => WP_REST_Server::CREATABLE,
                 'callback'              => array( $this, 'update_plugins' ),
-                'permission_callback'   => '__return_true', //array( $this, 'is_admin' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
             ),            
         ) );  
         
@@ -283,38 +283,25 @@ class REST_API extends WP_REST_Controller {
     public function connect( WP_REST_Request $request ) {
         $plugin = Plugin::get_instance();
         $token  = $request->get_param( 'token' );
+        $user   = $plugin->get_user_by_meta( 'siterack_connection_token', $token );
 
-        $user = get_users( array(
-            'meta_key'      => 'siterack_connection_token',
-            'meta_value'    => $token,
-            'number'        => 1,
-        ) );
-
-        if ( empty( $user ) ) {
+        if ( ! $user ) {
             return new WP_Error(
-                'siterack_error',
-                __( 'Invalid connection token.', 'siterack' ),
+                'siterack_connection_user_not_found',
+                __( 'Invaid connection token.', 'siterack' ),
                 array( 'status' => 401 )
             );
         }
 
-        $user = $user[0];
-
-        if ( $plugin->is_connection_token_expired( $token ) ) {
+        if ( $plugin->is_connection_token_expired( $token, $user->ID ) ) {
             return new WP_Error(
-                'siterack_error',
+                'siterack_connection_token_expired',
                 __( 'Connection token has expired.', 'siterack' ),
                 array( 'status' => 401 )
             );
         }
 
-        $json_web_token = new JSON_Web_Token();
-        $token          = $json_web_token->generate( $user->ID );
-
-        return array(
-            'user_id'   => $user->ID,
-            'token'     => $token,
-        );
+        return $plugin->init_plugin( $user );
     }
 
     /**
@@ -446,12 +433,48 @@ class REST_API extends WP_REST_Controller {
             require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
         }
 
+        $results    = array();
         $plugins    = $request->get_param( 'plugins' );
         $skin       = new Empty_Upgrader_Skin();
         $upgrader   = new Plugin_Upgrader( $skin );
-        $results    = $upgrader->bulk_upgrade( $plugins );
 
-        return $skin->feedback;
+        foreach ( $plugins as $plugin ) {
+            $result = $upgrader->upgrade( $plugin );
+    
+            if ( true === $result ) {
+                $results[] = array(
+                    'plugin'    => $plugin,
+                    'success'   => true,
+                    'error'     => false,
+                );
+            } elseif ( is_wp_error( $result ) ) {
+                $results[] = array(
+                    'plugin'    => $plugin,
+                    'success'   => false,
+                    'error'     => $result->get_error_message(),
+                );
+            } elseif ( false === $result ) {
+                $results[] = array(
+                    'plugin'    => $plugin,
+                    'success'   => false,
+                    'error'     => end( $skin->feedback ),
+                );
+            } else {
+                $error = __( 'An unknown error occurred.', 'siterack' );
+    
+                if ( is_wp_error( $skin->result ) ) {
+                    $error = $skin->result->get_error_message();
+                }
+    
+                $results[] = array(
+                    'plugin'    => $plugin,
+                    'success'   => false,
+                    'error'     => $error,
+                );
+            }
+        }
+
+        return $results;
     }
 
     /**
