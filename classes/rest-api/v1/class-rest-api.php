@@ -119,6 +119,14 @@ class REST_API extends WP_REST_Controller {
             ),            
         ) );  
         
+        register_rest_route( $this->base, '/plugins/delete', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'delete_plugins' ),
+                'permission_callback'   => array( $this, 'is_admin' ),
+            ),            
+        ) ); 
+
         register_rest_route( $this->base, '/plugins/activate', array(
             array(
                 'methods'               => WP_REST_Server::CREATABLE,
@@ -474,6 +482,48 @@ class REST_API extends WP_REST_Controller {
             }
         }
 
+        return $results;
+    }
+
+    /**
+     * Deletes the specified plugins.
+     */
+    public function delete_plugins( WP_REST_Request $request ) {
+        if ( ! function_exists( 'delete_plugins' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $results        = array();
+        $error          = false;
+        $error_message  = '';
+        $plugins        = $request->get_param( 'plugins' );
+
+        // delete_plugins outputs a form if credentials are needed or invalid. Capture
+        // the output if any to prevent it from interfering with the API response.
+        ob_start();
+
+        $result = delete_plugins( $plugins );
+
+        ob_end_clean();
+
+        if ( is_wp_error( $result ) ) {
+            $error          = true;
+            $error_message  = $result->get_error_message();
+        } elseif ( true !== $result ) {
+            // If the result isn't a WP_Error and it's also not true (i.e. failed) then
+            // it should be due to not having permission to write to the filesystem.
+            $error          = true;
+            $error_message  = __( 'Filesystem is not writable.', 'siterack' );
+        }
+
+        foreach ( $plugins as $plugin ) {
+            $results[] = array(
+                'plugin'    => $plugin,
+                'success'   => ! $error,
+                'error'     => $error ? $error_message : false,
+            );
+        }
+        
         return $results;
     }
 
