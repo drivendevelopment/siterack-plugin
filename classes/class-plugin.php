@@ -99,7 +99,7 @@ final class Plugin extends Singleton {
      */
     public function init() {	
         $this->maybe_do_login();
-        $this->maybe_init_plugin();
+        $this->maybe_init_connection();
         $this->maybe_refresh_connection_token();
     }
 
@@ -164,9 +164,10 @@ final class Plugin extends Singleton {
     /**
      * Handles requests to initialize the plugin when connecting the site to SiteRack.
      */
-    public function maybe_init_plugin() {
-        $action = empty( $_GET['action'] ) ? false : sanitize_text_field( $_GET['action'] );
-        $user   = wp_get_current_user();
+    public function maybe_init_connection() {
+        $action     = empty( $_GET['action'] ) ? false : sanitize_text_field( $_GET['action'] );
+        $site_id    = empty( $_GET['site_id'] ) ? false : absint( $_GET['site_id'] );
+        $user       = wp_get_current_user();
 
         // Bail if we're not initializing the plugin
         if ( 'siterack_init' != $action ) return;
@@ -176,6 +177,11 @@ final class Plugin extends Singleton {
         ob_clean();
 
         header( 'Content-Type: application/json; charset=utf-8' );
+
+        // Bail if the site ID is missing
+        if ( ! $site_id ) {
+            wp_send_json_error( __( 'Missing site ID.', 'siterack' ) );
+        }
 
         // Only allow logged-in users to perform this action
         if ( 0 == $user->ID ) {
@@ -187,7 +193,7 @@ final class Plugin extends Singleton {
             wp_send_json_error( __( 'Only administrators may initialize SiteRack.', 'siterack' ) );
         }
 
-        wp_send_json_success( $this->init_plugin( $user ) );
+        wp_send_json_success( $this->init_connection( $site_id, $user ) );
 
         exit();
     }
@@ -224,28 +230,30 @@ final class Plugin extends Singleton {
     /**
      * Initializes the site secret and returns an access token for the user.
      * 
+     * @param int $site_id
+     *  The SiteRack site ID.
+     * 
      * @param WP_User $user
      *  The user to generate an access token for.
+     * 
+     * @param string $access_token
+     *  SiteRack access token.
      * 
      * @return array
      *  An array containing basic data about the site that is used when adding
      *  the site to the user's dashboard along with an access token.
      */
-    public function init_plugin( WP_User $user ) {
-        $secret = get_option( 'siterack_secret', false );
+    public function init_connection( int $site_id, WP_User $user, string $access_token = '' ) {
+        $connection = Connection::find_or_create( $site_id );
 
-        // Only generate a secret if the site doesn't already has one
-        if ( ! $secret ) {
-            // Generate a secret
-            $secret = $this->generate_token();
+        if ( ! $connection->access_token ) {
+            $connection->access_token = $access_token;
 
-            // Save the secret
-            update_option( 'siterack_secret', $secret );
+            $connection->save();
         }
 
-        // Generate a token.  This has to be done after the secret is saved
-        // as the token is signed with the secret
-        $token = new JSON_Web_Token();
+        // Generate a JSON web token for the user
+        $token = new JSON_Web_Token( $connection->secret );
         $token = $token->generate( $user->ID );
 
         return array(
@@ -382,5 +390,19 @@ final class Plugin extends Singleton {
         ) );
 
         return empty( $user[0] ) ? false : $user[0];       
+    }
+
+    /**
+     * Gets the SiteRack connections for this site.
+     */
+    public function get_connections() {
+        $connections    = array();
+        $items          = get_site_option( 'siterack_connections', array() );
+
+        foreach ( $items as $props ) {
+            $connections[] = new Connection( $props );
+        }
+
+        return $connections;
     }
 }

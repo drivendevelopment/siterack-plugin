@@ -205,6 +205,40 @@ class REST_API extends WP_REST_Controller {
     }  
 
     /**
+     * Checks the request for a JSON web token and attempts to decode it
+     * by looping through the site's connections until one is found that
+     * can decode the token.
+     * 
+     * @return mixed
+     *  The decoded token or false on failure.
+     */
+    private function get_decoded_token() {
+        $token = isset( $_SERVER['HTTP_X_SITERACK_TOKEN'] ) ? sanitize_text_field( $_SERVER['HTTP_X_SITERACK_TOKEN'] ) : false;
+
+        // Nothing we can do if we don't have a token
+        if ( ! $token ) {
+            return false;
+        }
+
+        $decoded_token  = false;
+        $connections    = Plugin::get_instance()->get_connections();
+
+        foreach ( $connections as $connection ) {
+            $json_web_token = new JSON_Web_Token( $connection->secret );
+            $decoded_token  = $json_web_token->validate( $token );
+
+            if ( is_wp_error( $token ) ) {
+                // Didn't work, try next connection
+                continue;
+            } else {
+                return $decoded_token;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Intercepts REST API requests and sets the current user to the one found in
      * the SiteRack JSON web token (if a user isn't already set).  If the token
      * doesn't exist or is invalid, nothing is changed.
@@ -232,6 +266,7 @@ class REST_API extends WP_REST_Controller {
             return $user_id;
         }
 
+        /*
         $json_web_token = new JSON_Web_Token();
         $token 			= $json_web_token->get_token_from_header();
         $token 			= $json_web_token->validate( $token );
@@ -239,6 +274,12 @@ class REST_API extends WP_REST_Controller {
         if ( is_wp_error( $token ) ) {
             //$this->token_error = $token;
 
+            return $user_id;
+        }
+        */
+        $token = $this->get_decoded_token();
+
+        if ( ! $token ) {
             return $user_id;
         }
 
@@ -493,16 +534,22 @@ class REST_API extends WP_REST_Controller {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
 
-        $results        = array();
-        $error          = false;
-        $error_message  = '';
-        $plugins        = $request->get_param( 'plugins' );
+        if ( ! function_exists( 'request_filesystem_credentials' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+
+        $results            = array();
+        $error              = false;
+        $error_message      = '';
+        $plugins            = $request->get_param( 'plugins' );
+        $active_plugins     = ( array ) get_option( 'active_plugins', array() );
+        $plugins_to_delete  = array_diff( $plugins, $active_plugins );
 
         // delete_plugins outputs a form if credentials are needed or invalid. Capture
         // the output if any to prevent it from interfering with the API response.
         ob_start();
 
-        $result = delete_plugins( $plugins );
+        $result = delete_plugins( $plugins_to_delete );
 
         ob_end_clean();
 
@@ -517,13 +564,21 @@ class REST_API extends WP_REST_Controller {
         }
 
         foreach ( $plugins as $plugin ) {
-            $results[] = array(
-                'plugin'    => $plugin,
-                'success'   => ! $error,
-                'error'     => $error ? $error_message : false,
-            );
+            if ( in_array( $plugin, $active_plugins ) ) {
+                $results[] = array(
+                    'plugin'    => $plugin,
+                    'success'   => false,
+                    'error'     => __( 'Plugin cannot be deleted because it is active.', 'siterack' ),
+                );
+            } else {
+                $results[] = array(
+                    'plugin'    => $plugin,
+                    'success'   => ! $error,
+                    'error'     => $error ? $error_message : false,
+                );
+            }            
         }
-        
+
         return $results;
     }
 
@@ -575,13 +630,10 @@ class REST_API extends WP_REST_Controller {
 
         $plugin         = $request->get_param( 'plugin' );
         $network_wide   = $request->get_param( 'network_wide' );
-        $result         = deactivate_plugins( $plugin, false, $network_wide );
+        
+        deactivate_plugins( $plugin, false, $network_wide );
 
-        if ( is_wp_error( $result ) ) {
-            return $result;
-        } else {
-            return true;
-        }
+        return true;
     }     
     /**
      * Deactivates multiple plugins at once.
@@ -593,13 +645,10 @@ class REST_API extends WP_REST_Controller {
 
         $plugins        = $request->get_param( 'plugins' );
         $network_wide   = $request->get_param( 'network_wide' );
-        $result         = deactivate_plugins( $plugins, false, $network_wide );
+        
+        deactivate_plugins( $plugins, false, $network_wide );
 
-        if ( is_wp_error( $result ) ) {
-            return $result;
-        } else {
-            return true;
-        }
+        return true;
     }    
 
     /**

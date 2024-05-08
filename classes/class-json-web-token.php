@@ -21,8 +21,8 @@ class JSON_Web_Token {
 
     public string $algorithm = 'HS256';
 
-    public function __construct() {
-        $this->secret = get_option( 'siterack_secret', '' );
+    public function __construct( $secret = '' ) {
+        $this->secret = $secret;
     }
 
     public function get_token_from_header() {
