@@ -24,12 +24,6 @@ class Connection {
      */
     public $access_token;
 
-    /**
-     * The connection's public key that can be used to manually connect the
-     * site to SiteRack.
-     */
-    public $public_key;
-
     public function __construct( $props = array() ) {
         if ( ! empty( $props['site_id'] ) ) {
             $this->site_id = $props['site_id'];
@@ -41,10 +35,6 @@ class Connection {
 
         if ( ! empty( $props['access_token'] ) ) {
             $this->access_token = $props['access_token'];
-        }
-
-        if ( ! empty( $props['public_key'] ) ) {
-            $this->public_key = $props['public_key'];
         }
     }
 
@@ -70,7 +60,6 @@ class Connection {
         $connection             = new Connection();
         $connection->site_id    = $site_id;
         $connection->secret     = Plugin::get_instance()->generate_token();
-        $connection->public_key = bin2hex( random_bytes( 16 ) );
 
         $connection->save();
 
@@ -81,8 +70,7 @@ class Connection {
      * Saves the connection to the database.
      */
     public function save() {
-        $connections    = Plugin::get_instance()->get_connections();
-        $new_connection = $this;
+        $connections = Plugin::get_instance()->get_connections();
 
         $connections = array_filter( $connections, fn( $connection ) => $connection->site_id != $this->site_id );
         $connections[] = $this;
@@ -92,7 +80,6 @@ class Connection {
                 'site_id'       => $connection->site_id,
                 'secret'        => $connection->secret,
                 'access_token'  => $connection->access_token,
-                'public_key'    => $connection->public_key,
             );
         }, $connections );
 

@@ -31,16 +31,17 @@ final class Plugin extends Singleton {
         // Register autoload function
         spl_autoload_register( array( $this, 'autoload' ) );
 
-        // Override SiteRack app URL if an alternate URL is defined
+        // Override SiteRack app URL if an alternate URL is defined (useful
+        // for testing and local development)
         if ( defined( 'SITERACK_APP_URL' ) ) {
             $this->siterack_app_url = SITERACK_APP_URL;
         }
 
-        add_action( 'init', array( $this, 'init' ) );
-        add_action( 'admin_init', array( $this, 'init_updates' ) );
-        add_action( 'rest_api_init', array( $this, 'init_rest_api' ) );
-        add_action( 'admin_notices', array( $this, 'maybe_show_connection_notice' ) );
-        add_action( 'admin_notices', array( $this, 'maybe_show_connection_success_notice' ) );
+        add_action( 'init',             array( $this, 'init' ) );
+        add_action( 'admin_init',       array( $this, 'init_updates' ) );
+        add_action( 'rest_api_init',    array( $this, 'init_rest_api' ) );
+        // add_action( 'admin_notices',    array( $this, 'maybe_show_connection_notice' ) );
+        // add_action( 'admin_notices',    array( $this, 'maybe_show_connection_success_notice' ) );
     }
 
     /**
@@ -162,7 +163,8 @@ final class Plugin extends Singleton {
     }
 
     /**
-     * Handles requests to initialize the plugin when connecting the site to SiteRack.
+     * Handles requests to connect the site to SiteRack when connecting using credentials (connections
+     * made using a connection token/key are handled by the REST API).
      */
     public function maybe_init_connection() {
         $action     = empty( $_GET['action'] ) ? false : sanitize_text_field( $_GET['action'] );
@@ -245,7 +247,7 @@ final class Plugin extends Singleton {
      */
     public function init_connection( int $site_id, WP_User $user, string $access_token = '' ) {
         $connection = Connection::find_or_create( $site_id );
-
+        
         if ( ! $connection->access_token ) {
             $connection->access_token = $access_token;
 
@@ -295,46 +297,6 @@ final class Plugin extends Singleton {
             'siterack_connection_token',
             true
         );
-    }
-
-    /**
-     * Displays an admin notice prompting the user to add the site to their dashboard
-     * if the site hasn't been added to one yet.
-     */
-    public function maybe_show_connection_notice() {
-        // Only show to users with permission to activate plugins
-        if ( ! current_user_can( 'activate_plugins' ) ) return;
-
-        $secret = get_option( 'siterack_secret', false );
-
-        if ( ! $secret ) {
-            $url = add_query_arg( array(
-                'name'  => get_bloginfo( 'name' ),			
-                'url'   => get_bloginfo( 'url' ),
-                'token' => $this->get_connection_token(),
-            ), $this->siterack_app_url . 'connect' );
-
-            ?>
-                <div class="notice notice-info">
-                    <p><?php _e( "Thank you for installing SiteRack! We're excited to have you on board.", 'siterack' ); ?></p>
-                    <p><?php _e( "To add this site to your SiteRack dashboard, simply click the button below.", 'siterack' ); ?></p>
-                    <p><a class="button button-primary" href="<?php echo esc_url( $url ); ?>"><?php _e( 'Connect to SiteRack', 'siterack' ); ?></a></p>
-                </div>
-            <?php
-        }
-    }
-
-    /**
-     * Displays a notice when a site has been successfully connected.
-     */
-    public function maybe_show_connection_success_notice() {
-        if ( isset( $_GET['action'] ) && 'siterack_connect_success' === $_GET['action'] ) {
-            ?>
-                <div class="notice notice-success">
-                    <p><?php _e( 'Success! This site has been added to your SiteRack dashboard.', 'siterack' ); ?></p>
-                </div>
-            <?php            
-        }
     }
 
     /**

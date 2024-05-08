@@ -40,6 +40,10 @@ class REST_API extends WP_REST_Controller {
                 'callback'              => array( $this, 'connect' ),
                 'permission_callback'   => '__return_true',
                 'args' => array(
+                    'site_id' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'absint',
+                    ),                   
                     'token' => array(
                         'required'          => true,
                         'sanitize_callback' => 'sanitize_text_field',
@@ -330,9 +334,10 @@ class REST_API extends WP_REST_Controller {
      * hasn't expired, issues a JSON web token for the user.
      */
     public function connect( WP_REST_Request $request ) {
-        $plugin = Plugin::get_instance();
-        $token  = $request->get_param( 'token' );
-        $user   = $plugin->get_user_by_meta( 'siterack_connection_token', $token );
+        $plugin     = Plugin::get_instance();
+        $site_id    = $request->get_param( 'site_id' );
+        $token      = $request->get_param( 'token' );
+        $user       = $plugin->get_user_by_meta( 'siterack_connection_token', $token );
 
         if ( ! $user ) {
             return new WP_Error(
@@ -350,7 +355,7 @@ class REST_API extends WP_REST_Controller {
             );
         }
 
-        return $plugin->init_plugin( $user );
+        return $plugin->init_connection( $site_id, $user );
     }
 
     /**
