@@ -231,7 +231,7 @@ class REST_API extends WP_REST_Controller {
             $json_web_token = new JSON_Web_Token( $connection->secret );
             $decoded_token  = $json_web_token->validate( $token );
 
-            if ( is_wp_error( $token ) ) {
+            if ( is_wp_error( $decoded_token ) ) {
                 // Didn't work, try next connection
                 continue;
             } else {

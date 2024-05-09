@@ -40,8 +40,6 @@ final class Plugin extends Singleton {
         add_action( 'init',             array( $this, 'init' ) );
         add_action( 'admin_init',       array( $this, 'init_updates' ) );
         add_action( 'rest_api_init',    array( $this, 'init_rest_api' ) );
-        // add_action( 'admin_notices',    array( $this, 'maybe_show_connection_notice' ) );
-        // add_action( 'admin_notices',    array( $this, 'maybe_show_connection_success_notice' ) );
     }
 
     /**
@@ -221,11 +219,11 @@ final class Plugin extends Singleton {
             $token
         );
 
-        // Expire token after 1 hour
+        // Expire token after 15 minutes
         update_user_meta(
             get_current_user_id(),
             'siterack_connection_token_expiration',
-            time() + ( 60 * 60 )
+            time() + ( 60 * 15 )
         );
     }
 
