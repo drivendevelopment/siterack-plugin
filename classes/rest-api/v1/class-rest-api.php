@@ -5,8 +5,10 @@ namespace SiteRack\REST_API\v1;
 use Exception;
 use WP_Error;
 use WP_REST_Request;
+use WP_REST_Response;
 use WP_REST_Controller;
 use WP_REST_Server;
+use Core_Upgrader;
 use Plugin_Upgrader;
 
 use SiteRack\Plugin;
@@ -65,6 +67,14 @@ class REST_API extends WP_REST_Controller {
             ),
         ) );
 
+        register_rest_route( $this->base, '/info', array(
+            array(
+                'methods'               => WP_REST_Server::READABLE,
+                'callback'              => array( $this, 'info' ),
+                'permission_callback'   => array( $this, 'has_valid_token' ),
+            ),
+        ) );
+
         register_rest_route( $this->base, '/users', array(
             array(
                 'methods'               => WP_REST_Server::READABLE,
@@ -91,6 +101,14 @@ class REST_API extends WP_REST_Controller {
             ),
         ) );
         
+        register_rest_route( $this->base, '/core/update', array(
+            array(
+                'methods'               => WP_REST_Server::CREATABLE,
+                'callback'              => array( $this, 'update_core' ),
+                'permission_callback'   => '__return_true', //array( $this, 'is_admin' ),
+            ),
+        ) ); 
+
         register_rest_route( $this->base, '/cache/flush', array(
             array(
                 'methods'               => WP_REST_Server::CREATABLE,
@@ -359,6 +377,66 @@ class REST_API extends WP_REST_Controller {
     }
 
     /**
+     * Updates the core version of WordPress to the latest version.
+     */
+    public function update_core() {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/update.php';
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        require ABSPATH . WPINC . '/version.php';
+
+        // Force WordPress to check for update
+        wp_version_check( array(), true );
+
+        $updates = get_core_updates();
+  
+        if ( isset( $updates[0]->version ) && version_compare( $updates[0]->version, $wp_version, '>' ) ) {
+            $update         = find_core_update( $updates[0]->version, $updates[0]->locale );
+            $credentials    = request_filesystem_credentials( '', '', false, ABSPATH );
+ 
+            // Clean up buffer in case request_filesystem_credentials output anything
+            ob_clean();
+
+            if ( ! $update ) {
+                return new WP_Error(
+                    'siterack_error',
+                    __( 'Could not find update.', 'siterack' ),
+                    array( 'status' => 500 )
+                );
+            }
+
+            if ( true === $credentials ) {
+                // Credentials okay, continue
+                $upgrader = new Core_Upgrader( new Empty_Upgrader_Skin() );
+
+                $result = $upgrader->upgrade( $update );  
+
+                if ( is_wp_error( $result ) ) {
+                    return new WP_Error(
+                        'siterack_error',
+                        $result->get_error_message(),
+                        array( 'status' => 500 )
+                    );
+                } else {
+                    return new WP_REST_Response( array( 'success' => true ), 200 );
+                }
+            } else {
+                return new WP_Error(
+                    'siterack_error',
+                    __( 'Could not update WordPress due to insufficient file permissions.', 'siterack' ),
+                    array( 'status' => 500 )
+                );
+            }
+        } else {
+            return new WP_Error(
+                'siterack_error',
+                __( 'No update available.', 'siterack' ),
+                array( 'status' => 500 )
+            );
+        }
+    }
+    
+    /**
      * Returns a URL that can be used to log the user into the site.
      */
     public function login_url( WP_REST_Request $request ) {
@@ -374,6 +452,30 @@ class REST_API extends WP_REST_Controller {
         ), get_site_url() );
 
         return $url;
+    }
+
+    /**
+     * Returns information about the site.
+     */
+    public function info() {
+        $info = array(
+            'name'          => get_bloginfo( 'name' ),
+            'description'   => get_bloginfo( 'description' ),
+            'admin_email'   => get_bloginfo( 'admin_email' ),
+            'language'      => get_bloginfo( 'language' ),
+            'version'       => get_bloginfo( 'version' ),
+            'wp_version'    => get_bloginfo( 'version', 'display' ),
+            'charset'       => get_bloginfo( 'charset' ),
+            'timezone'      => get_option( 'timezone_string' ),
+            'gmt_offset'    => get_option( 'gmt_offset' ),
+            'date_format'   => get_option( 'date_format' ),
+            'time_format'   => get_option( 'time_format' ),
+            'start_of_week' => get_option( 'start_of_week' ),
+            'timezone'      => get_option( 'timezone_string' ),
+            'active_theme'  => wp_get_theme(),
+        );
+
+        return $info;
     }
 
     /**

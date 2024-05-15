@@ -244,6 +244,8 @@ final class Plugin extends Singleton {
      *  the site to the user's dashboard along with an access token.
      */
     public function init_connection( int $site_id, WP_User $user, string $access_token = '' ) {
+        require ABSPATH . WPINC . '/version.php';
+
         $connection = Connection::find_or_create( $site_id );
         
         if ( ! $connection->access_token ) {
@@ -264,6 +266,7 @@ final class Plugin extends Singleton {
             'user_display_name' => $user->display_name,
             'user_avatar_url' 	=> get_avatar_url( $user->ID ),
             'token' 			=> $token,
+            'wp_version'        => $wp_version,
         );
     }
 
